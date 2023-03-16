@@ -1,0 +1,19 @@
+# Using a RTX 2080ti
+
+========== Running with N ~8M
+
+- atomic_red: 19.52 miliseconds
+- reduce_a: 78.56 microseconds
+- reduce_ws: 78.18 microseconds
+
+========= Running with N = 640*256 = 163840
+
+- atomic_red: 384.26 microseconds
+- reduce_a: 7.62 microseconds
+- reduce_ws: 6.14 microseconds
+
+========== Running with N ~32M
+
+- atomic_red: 39.02 miliseconds
+- reduce_a: 148.16 microseconds
+- reduce_ws: 146.91 microseconds

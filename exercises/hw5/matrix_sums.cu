@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-
 // error checking macro
 #define cudaCheckErrors(msg) \
     do { \
@@ -37,6 +36,29 @@ __global__ void column_sums(const float *A, float *sums, size_t ds){
       sum += A[idx+ds*i];         // write a for loop that will cause the thread to iterate down a column, keeeping a running sum, and write the result to sums
     sums[idx] = sum;
 }}
+
+__global__ void column_sums_n(const float *A, float *sums, size_t ds){
+  int idx = blockIdx.x; // row indicator
+  if(idx < ds){
+    __shared__ float sdata[block_size];
+    int tid = threadIdx.x;
+    sdata[tid] = 0.0f;
+    size_t tidx = tid;
+
+    while (tidx < ds) {  // grid stride loop to load data
+      sdata[tid] += A[idx + tidx*ds];
+      tidx += blockDim.x;  
+      }
+
+    for (unsigned int s=blockDim.x/2; s>0; s>>=1) {
+     __syncthreads();
+     if (tid < s)  // parallel sweep reduction
+       sdata[tid] += sdata[tid + s];
+     }
+    if (tid == 0) sums[idx] = sdata[0];;
+  }
+}
+
 bool validate(float *data, size_t sz){
   for (size_t i = 0; i < sz; i++)
     if (data[i] != (float)sz) {printf("results mismatch at %lu, was: %f, should be: %f\n", i, data[i], (float)sz); return false;}
@@ -67,6 +89,17 @@ int main(){
   printf("row sums correct!\n");
   cudaMemset(d_sums, 0, DSIZE*sizeof(float));
   column_sums<<<(DSIZE+block_size-1)/block_size, block_size>>>(d_A, d_sums, DSIZE);
+  cudaCheckErrors("kernel launch failure");
+  //cuda processing sequence step 2 is complete
+  // copy vector sums from device to host:
+  cudaMemcpy(h_sums, d_sums, DSIZE*sizeof(float), cudaMemcpyDeviceToHost);
+  //cuda processing sequence step 3 is complete
+  cudaCheckErrors("kernel execution failure or cudaMemcpy H2D failure");
+  if (!validate(h_sums, DSIZE)) return -1; 
+  printf("column sums correct!\n");
+
+  cudaMemset(d_sums, 0, DSIZE*sizeof(float));
+  column_sums_n<<<DSIZE, block_size>>>(d_A, d_sums, DSIZE);
   cudaCheckErrors("kernel launch failure");
   //cuda processing sequence step 2 is complete
   // copy vector sums from device to host:
